@@ -202,13 +202,6 @@ debounce :: forall n a dom. (HiddenClockResetEnable dom)
 debounce delay current input_signal = undefined
 ```
 
-Firstly, let's make a counter to count down (since it's easy to compare to 0):
-
-``` haskell
-    -- Start at Delay and count downwards to 0
-    down = countDown'' delay
-```
-
 We need to see if the `input_signal` is different from the `current` value. To
 do this we need to compare the `input_signal` value to the current value, which
 will require a new block:
@@ -221,24 +214,50 @@ changed current input_signal = input_signal ./=. last_known_value
     where last_known_value = register current input_signal
 ```
 
-We can now tell if the input signal has changed from the previous state, and
-have a counter. Let's put it together!
+We can now tell if the input signal has changed from the previous state. One way
+to make this debouncer work is to reset our counter if the provided signal
+changes:
 
 ``` haskell
+counter = register delay (getNext <$> counter)
+getNext value = mux (changed current input_signal) delay (value - 1)
+```
+
+The `mux` function acts as an `if` statement:
+
+- if the input signal has changed from the original value, then reset the
+  counter
+- if the input signal has NOT changed, then decrement the counter
+
+``` haskell
+mux :: Signal Bool -> Signal a -> Signal a -> Signal a
+mux check do_true do_false
+```
+
+Documentation: A multiplexer. Given "mux b t f", output t when b is True, and f when b is False.
+
+``` haskell
+changed :: HiddenClockResetEnable dom 
+        => (Eq a, NFDataX a) 
+        => a -> Signal dom a -> Signal dom Bool
+changed current input_signal = input_signal ./=. last_known_value
+    where last_known_value = register current input_signal
+
 debounce :: forall n a dom. (HiddenClockResetEnable dom)
          => KnownNat n
          => (NFDataX a, Eq a)
          => SNat n -> a -> Signal dom a -> Signal dom a
 debounce delay current input_signal = regEn current stable input_signal
-    where count = countDown'' delay
-          stable = count .==. 0
-```
+    where did_change = changed current input_signal
 
-## Improvement: Reload the counter if the state changes 
+          counter = register delay (getNext <$> counter)
+          getNext value = mux did_change delay (value - 1)
+          
+          stable = (pure 0) .==. counter
+```
 
 ## Other topics (TODO)
 
-- Debounce (regEn)
 - Delay a signal (delay)
 
 ## Vector / BitVector Topics
