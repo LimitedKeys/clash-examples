@@ -1,0 +1,12 @@
+cradle:
+  cabal:
+    - path: "./src"
+      component: "lib:registers"
+    - path: "./tests/doctests.hs"
+      component: "registers:doctests"
+    - path: "./tests"
+      component: "registers:test-library"
+    - path: "./bin/Clashi.hs"
+      component: "registers:exe:clashi"
+    - path: "./bin/Clash.hs"
+      component: "registers:exe:clash"
