@@ -22,6 +22,11 @@ To build:
 
 The initial build takes FOREVER.
 
+## Resources
+
+- [Clash.Prelude](https://hackage.haskell.org/package/clash-prelude-1.8.1)
+- [Clash-lang Discourse Group](https://clash-lang.discourse.group/)
+
 # Projects
 
 - [Learning / Work with Registers](./registers/readme.md)

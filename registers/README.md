@@ -327,14 +327,14 @@ clashi> simulateN @System 15 (debounce (SNat @8) 0) [0, 0, 1, 1, 1, 1, 1, 1, 1, 
 Oddly, this doesn't work for 2 or 3?
 
 ``` haskell
-clashi> simulateN @System 10 (debounce (SNat @2) 0) [0, 0, 1, 1, ]
+clashi> simulateN @System 10 (debounce (SNat @2) 0) [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]
 [0,0,0,1,1,1,1,1,1,1]
-clashi> simulateN @System 10 (debounce (SNat @3) 0) [0, 0, 1, 1, 1
-, 1, 1, 1, 1, 1, 1]
+clashi> simulateN @System 10 (debounce (SNat @3) 0) [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+[0,0,0,1,1,1,1,1,1,1]
 ```
 
 Maybe 2 or 3 is lower than the propogation deley so it can't be done? or
-something like that. Will need to check somehow?
+something like that. Will need to check somehow? VERILATOR. TODO.
 
 ## Other topics (TODO)
 
