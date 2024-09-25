@@ -36,15 +36,31 @@ countDown'' :: forall n dom. (HiddenClockResetEnable dom)
             => SNat n -> Signal dom (Unsigned (CLog 2 n))
 countDown'' y = counter
     where start = snatToNum y
-          counter = register start (goDown <$> counter)
+          counter = register (start - 1) (goDown <$> counter)
           goDown 0 = 0
           goDown x = x - 1
 
--- Take a signal dom a - if it changes from the "start" state, then start a
--- counter. After the counter is complete, take the value of the input and
--- return that?
+changed :: HiddenClockResetEnable dom 
+        => (Eq a, NFDataX a) 
+        => a -> Signal dom a -> Signal dom Bool
+changed current input_signal = input_signal ./=. last_known_value
+    where last_known_value = register current input_signal
+
 debounce :: forall n a dom. (HiddenClockResetEnable dom)
+         => (1 <= n)
          => KnownNat n
          => (NFDataX a, Eq a)
          => SNat n -> a -> Signal dom a -> Signal dom a
-debounce _ current input_signal = undefined
+debounce delay_time current input_signal = regEn current stable input_signal
+    where did_change = changed current input_signal
+
+          counter :: HiddenClockResetEnable dom
+                  => (1 <= n, KnownNat n)
+                  => SNat n -> Signal dom (Unsigned (CLog 2 n))
+          counter y = register start (getNext (counter y))
+              where start = (snatToNum y) - 1
+                    getNext c = mux did_change (pure start) (goDown <$> c)
+                    goDown 0 = 0
+                    goDown v = v - 1
+          
+          stable = (pure 0) .==. (counter delay_time)

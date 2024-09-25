@@ -172,39 +172,66 @@ countDown'' (SNat @10)
      Signal dom (Unsigned (CLog 2 10))
 ```
 
-TODO - How do I resolve this?
+Let's test `countDown''`:
+
+``` haskell
+clashi> sampleN @System 10 $ countDown'' (SNat @10)
+[10,10,9,8,7,6,5,4,3,2]
+clashi> sampleN @System 10 $ countDown'' (SNat @9)
+[9,9,8,7,6,5,4,3,2,1]
+clashi> sampleN @System 10 $ countDown'' (SNat @15)
+[15,15,14,13,12,11,10,9,8,7]
+clashi> sampleN @System 10 $ countDown'' (SNat @8)
+[0,0,0,0,0,0,0,0,0,0]
+clashi> sampleN @System 10 $ countDown'' (SNat @4)
+[0,0,0,0,0,0,0,0,0,0]
+clashi> sampleN @System 10 $ countDown'' (SNat @16)
+[0,0,0,0,0,0,0,0,0,0]
+```
+
+WHOA what's happening!? Why 0's?
+
+Let's calculate the Log:
+
+$$ ceiling of \log_{2}{5} = 3 $$
+$$ ceiling of \log_{2}{4} = 2 $$
+$$ ceiling of \log_{2}{3} = 2 $$
+$$ ceiling of \log_{2}{2} = 1 $$
+
+How many bits to we need to represent the value 4? 0b100 -> 3 bits! But our
+quick math calculates 2... so we have to add 1 bit OR use (n - 1) in the code.
+
+This updates our code to be:
+
+``` haskell
+countDown'' :: forall n dom. (HiddenClockResetEnable dom)
+            => (1 <= n)
+            => KnownNat n
+            => SNat n -> Signal dom (Unsigned (CLog 2 n))
+countDown'' y = counter
+    where start = snatToNum y
+          counter = register (start - 1) (goDown <$> counter)
+          goDown 0 = 0
+          goDown x = x - 1
+```
+
+``` haskell
+clashi> sampleN @System 10 $ countDown'' (SNat @10)
+[9,9,8,7,6,5,4,3,2,1]
+clashi> sampleN @System 10 $ countDown'' (SNat @8)
+[7,7,6,5,4,3,2,1,0,0]
+clashi> sampleN @System 10 $ countDown'' (SNat @4)
+[4,4,3,2,1,0,0,0,0,0]
+```
+
+Cool beans.
 
 ## Debounce
 
-We can use `regEn` with a counter to create a "debouncer". How this debouncer
-works: If the `input_signal` changes, then start a counter. If the counter
-expires and the `input_signal` has not changed again, then change the output.
-Otherwise keep the output the same.
+Let's say we want to wait an amount of time if the provided input signal changes
+before we update the output signal appropriately - how would we do this?
 
-Questions:
-
-- How do I test this?
-
-In short, we have a few inputs:
-
-- Time to wait (`delay`)
-- What is the current value (`current`)
-- The input signal (`input_signal`)
-
-For simplicity, `delay` will be provided as an `SNat`, but this could easily be
-a `ClockDivider` or something in real code.
-
-``` haskell
-debounce :: forall n a dom. (HiddenClockResetEnable dom)
-         => KnownNat n
-         => (NFDataX a, Eq a)
-         => SNat n -> a -> Signal dom a -> Signal dom a
-debounce delay current input_signal = undefined
-```
-
-We need to see if the `input_signal` is different from the `current` value. To
-do this we need to compare the `input_signal` value to the current value, which
-will require a new block:
+Firstly, to tell if a signal has changed we can use a register:
 
 ``` haskell
 changed :: HiddenClockResetEnable dom 
@@ -214,27 +241,51 @@ changed current input_signal = input_signal ./=. last_known_value
     where last_known_value = register current input_signal
 ```
 
-We can now tell if the input signal has changed from the previous state. One way
-to make this debouncer work is to reset our counter if the provided signal
-changes:
+Where `current` is the value of the input signal right now, and the
+`input_sigal` is the signal that we want to check. We can see if an input signal
+has changed by:
 
 ``` haskell
-counter = register delay (getNext <$> counter)
-getNext value = mux (changed current input_signal) delay (value - 1)
+did_change = changed current input_signal
 ```
 
-The `mux` function acts as an `if` statement:
-
-- if the input signal has changed from the original value, then reset the
-  counter
-- if the input signal has NOT changed, then decrement the counter
+Once we know the input signal has changed, we need a timer. The timer should
+"Reload" when things change, and count down to 0. (It could count up instead, I
+like counting down though).
 
 ``` haskell
-mux :: Signal Bool -> Signal a -> Signal a -> Signal a
-mux check do_true do_false
+counter :: HiddenClockResetEnable dom
+        => (1 <= n, KnownNat n)
+        => SNat n -> Signal dom (Unsigned (1 + (CLog 2 n)))
+counter y = register start (getNext (counter y))
+    where start = (snatToNum y) - 1
+          getNext c = mux did_change (pure start) (goDown <$> c)
+          goDown 0 = 0
+          goDown v = v - 1
 ```
 
-Documentation: A multiplexer. Given "mux b t f", output t when b is True, and f when b is False.
+This is a _slight_ change from `countDown''` - this count down timer has a
+`reload`. 
+
+The `mux` function is nice - it provides `if - else` functionality on `Signal
+dom X` values. If our signal `did_change` then we reload our counter with the
+`start` value. Otherwise we count down.
+
+We can say that our input signal is `stable` when the time reaches 0:
+
+``` haskell
+stable = (pure 0) .==. (counter delay_time)
+```
+
+And once the `input_signal` is `stable` we can update the output. We can use the
+register with an extra enable (`regEn`) to update the register when this
+condition is met:
+
+``` haskell
+regEn current stable input_signal
+```
+
+Putting it all together:
 
 ``` haskell
 changed :: HiddenClockResetEnable dom 
@@ -244,21 +295,50 @@ changed current input_signal = input_signal ./=. last_known_value
     where last_known_value = register current input_signal
 
 debounce :: forall n a dom. (HiddenClockResetEnable dom)
+         => (1 <= n)
          => KnownNat n
          => (NFDataX a, Eq a)
          => SNat n -> a -> Signal dom a -> Signal dom a
-debounce delay current input_signal = regEn current stable input_signal
+debounce delay_time current input_signal = regEn current stable input_signal
     where did_change = changed current input_signal
 
-          counter = register delay (getNext <$> counter)
-          getNext value = mux did_change delay (value - 1)
+          counter :: HiddenClockResetEnable dom
+                  => (1 <= n, KnownNat n)
+                  => SNat n -> Signal dom (Unsigned (CLog 2 n))
+          counter y = register start (getNext (counter y))
+              where start = (snatToNum y) - 1
+                    getNext c = mux did_change (pure start) (goDown <$> c)
+                    goDown 0 = 0
+                    goDown v = v - 1
           
-          stable = (pure 0) .==. counter
+          stable = (pure 0) .==. (counter delay_time)
 ```
+
+Let's test it out! We can use the `simulateN` function to provide an input
+signal to a function:
+
+``` haskell
+clashi> simulateN @System 15 (debounce (SNat @6) 0) [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+[0,0,0,0,0,0,0,0,0,1,1,1,1,1,1]
+clashi> simulateN @System 15 (debounce (SNat @8) 0) [0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+[0,0,0,0,0,0,0,0,0,0,0,1,1,1,1]
+```
+
+Oddly, this doesn't work for 2 or 3?
+
+``` haskell
+clashi> simulateN @System 10 (debounce (SNat @2) 0) [0, 0, 1, 1, ]
+[0,0,0,1,1,1,1,1,1,1]
+clashi> simulateN @System 10 (debounce (SNat @3) 0) [0, 0, 1, 1, 1
+, 1, 1, 1, 1, 1, 1]
+```
+
+Maybe 2 or 3 is lower than the propogation deley so it can't be done? or
+something like that. Will need to check somehow?
 
 ## Other topics (TODO)
 
-- Delay a signal (delay)
+- Verilate the Debouncer and investivate what happens at 2 and 3
 
 ## Vector / BitVector Topics
 
