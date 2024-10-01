@@ -2,6 +2,7 @@
 module Play.Registers where
 
 import Clash.Prelude
+import Clash.Annotations.TH
 
 countUp :: HiddenClockResetEnable dom => Signal dom (Unsigned 4)
 countUp = register 0 (countUp + 1)
@@ -64,3 +65,12 @@ debounce delay_time current input_signal = regEn current stable input_signal
                     goDown v = v - 1
           
           stable = (pure 0) .==. (counter delay_time)
+
+-- Create a Top Entity for Simulation
+topEntity :: "CLK" ::: Clock System
+          -> "IN"  ::: Signal System Bit
+          -> "OUT" ::: Signal System Bit
+topEntity clk = withClockResetEnable clk resetGen enableGen circuit
+    where circuit inp = debounce (SNat @5) 0 inp 
+
+makeTopEntity 'topEntity

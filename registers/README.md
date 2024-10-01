@@ -334,7 +334,92 @@ clashi> simulateN @System 10 (debounce (SNat @3) 0) [0, 0, 1, 1, 1, 1, 1, 1, 1, 
 ```
 
 Maybe 2 or 3 is lower than the propogation deley so it can't be done? or
-something like that. Will need to check somehow? VERILATOR. TODO.
+something like that. Will need to check somehow? 
+
+Before we can check with Verilator, we have to generate some Verilog.
+
+## Generate Verilog 
+
+We need to create a "top design" which instantiates the debouncer.
+
+``` haskell
+-- Required for our hacks, put with the other imports
+import Clash.Annotations.TH
+
+topEntity :: "CLK" ::: Clock System
+          -> "IN"  ::: Signal System Bit
+          -> "OUT" ::: Signal System Bit
+topEntity clk = withClockResetEnable clk resetGen enableGen circuit
+    where circuit inp = debounce (SNat @5) 0 inp 
+
+makeTopEntity 'topEntity
+```
+
+Let's build and generate the Verilog:
+
+``` bash
+> stack run clash -- Play.Registers --verilog
+```
+
+This generates verilog to "./verilog/Play.Registers.topEntity/topEntity.v".
+
+We can verilate this using verilator:
+
+``` bash
+> cd verilog
+> verilator --cc Play.Registers.topEntity/topEntity.v
+```
+
+The `--cc` option generates C files to `obj_dir`. If we open up the
+`VtopEntity.h` file we can check the input / output ports:
+
+
+With this we can create a verilator Main file to test our code. Let's write:
+
+``` cpp
+...
+VL_MODULE(VtopEntity) {
+  public:
+    // CELLS
+    // Public to allow access to /*verilator_public*/ items;
+    // otherwise the application code can consider these internals.
+    VtopEntity_topEntity* topEntity;
+    
+    // PORTS
+    // The application code writes and reads these signals to
+    // propagate new values into/out from the Verilated model.
+    VL_IN8(CLK,0,0);
+    VL_IN8(IN,0,0);
+    VL_OUT8(OUT,0,0);
+```
+
+The names we gave the signals align with what we called them, so that's awesome.
+
+Let's write a main file to test things:
+
+``` cpp
+#include "VtopEntity.h
+#include "verilated.h"
+
+int main(void) {
+    VtopEntity* top = new VtopEntity;
+
+    // Initialize Trace HERE
+
+    // Reset
+    // Toggle Clock
+    // Check Inputs / Outputs
+
+    // C
+    return 0;
+}
+```
+
+To build with our test wrapper:
+
+``` bash
+> verilator -Wall --cc Play.Registers.topEntity/topEntity.v --exe --build main.c
+```
 
 ## Other topics (TODO)
 
