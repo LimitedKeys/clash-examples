@@ -4,15 +4,33 @@ module Play.Registers where
 import Clash.Prelude
 import Clash.Annotations.TH
 
+-- Simple Example, Count up to 2^4
 countUp :: HiddenClockResetEnable dom => Signal dom (Unsigned 4)
 countUp = register 0 (countUp + 1)
 
+-- Simple Example, Count up to 2^n
 countUp' :: forall n dom. (HiddenClockResetEnable dom, KnownNat n) => Signal dom (Unsigned n)
 countUp' = register 0 (countUp' + 1)
 
+-- Count up to 2^n
 countUp'' :: forall n dom. (HiddenClockResetEnable dom, KnownNat n) => SNat n -> Signal dom (Unsigned n)
 countUp'' _ = s
     where s = register 0 (s + 1)
+
+-- Count up to (Threshold - 1)
+--
+-- log2 4 = 2, which can represent 0, 1, 2, and 3
+--
+-- Requires ScopedTypeVariables to pass `n` to the internal SNat. This extension
+-- requies that `n` be declared in the `forall` statement.
+countUp''' :: forall n dom. (HiddenClockResetEnable dom, KnownNat n) 
+           => (1 <= n)
+           => SNat n
+           -> Signal dom (Unsigned (CLog 2 n))
+countUp''' _ = counter
+    where counter = register 0 (goUp <$> counter)
+          threshold = fromInteger $ snatToInteger (SNat @n) - 1
+          goUp v = if v < threshold then v + 1 else 0
 
 countDown :: forall a dom. (HiddenClockResetEnable dom)
           => (Eq a, NFDataX a, Num a)
@@ -37,6 +55,15 @@ countDown'' :: forall n dom. (HiddenClockResetEnable dom)
             => SNat n -> Signal dom (Unsigned (CLog 2 n))
 countDown'' y = counter
     where start = snatToNum y
+          counter = register (start - 1) (goDown <$> counter)
+          goDown 0 = 0
+          goDown x = x - 1
+
+countDown''' :: forall n dom. (HiddenClockResetEnable dom, KnownNat n)
+             => (1 <= n)
+             => SNat n -> Signal dom (Unsigned (CLog 2 n))
+countDown''' _ = counter
+    where start = fromInteger $ snatToInteger (SNat @n)
           counter = register (start - 1) (goDown <$> counter)
           goDown 0 = 0
           goDown x = x - 1

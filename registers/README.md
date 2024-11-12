@@ -41,7 +41,7 @@ To create a simple up counter:
 
 ``` haskell
 countUp :: HiddenClockResetEnable dom => Signal dom (Unsigned 4)
-countUp = register 0 (counter + 1)
+countUp = register 0 (countUp + 1)
 ```
 
 Which we can test with `sampleN`:
