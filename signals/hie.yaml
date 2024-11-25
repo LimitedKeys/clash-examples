@@ -1,0 +1,12 @@
+cradle:
+  cabal:
+    - path: "./src"
+      component: "lib:signals"
+    - path: "./tests/doctests.hs"
+      component: "signals:doctests"
+    - path: "./tests"
+      component: "signals:test-library"
+    - path: "./bin/Clashi.hs"
+      component: "signals:exe:clashi"
+    - path: "./bin/Clash.hs"
+      component: "signals:exe:clash"
