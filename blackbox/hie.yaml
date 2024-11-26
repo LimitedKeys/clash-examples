@@ -1,0 +1,12 @@
+cradle:
+  cabal:
+    - path: "./src"
+      component: "lib:blackbox"
+    - path: "./tests/doctests.hs"
+      component: "blackbox:doctests"
+    - path: "./tests"
+      component: "blackbox:test-library"
+    - path: "./bin/Clashi.hs"
+      component: "blackbox:exe:clashi"
+    - path: "./bin/Clash.hs"
+      component: "blackbox:exe:clash"
