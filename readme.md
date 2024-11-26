@@ -31,4 +31,17 @@ The initial build takes FOREVER.
 
 # Projects
 
-- [Learning / Work with Registers](./registers/readme.md)
+Projets `were` organized into stack projects, but I think that this is a bit
+cumbersome. Reorganizing into a single library makes the most sense right now I
+think.
+
+For now, the notes will organized in the docs direcotry.
+
+- [Learning about Registers](./docs/01-registers.md)
+- [Learning about Signals](./docs/02-signals.md)
+- [Learning about Vectors](./docs/03-vectors.md)
+- [Learning about Blackbox](./docs/04-blackbox.md)
+
+## TODO
+
+- Registers example issue with 2,3?
